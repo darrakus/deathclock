@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Death Clock - Monde de la Mort</title>
+
+    <style>
+        :root {
+            --bg-color: #050505;        /* Deep Black */
+            --text-color: #ff7100;      /* Elite HUD Orange */
+            --text-dim: #b34f00;        /* Dimmed Orange */
+            --safe-color: #00ff00;      /* Neon Green */
+            --warn-color: #ffcc00;      /* Caution Yellow */
+            --danger-color: #ff0000;    /* Neon Red */
+            --needle-color: #ffffff;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 1px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            text-align: center;
+            padding-bottom: 40px;
+        }
+
+        /* TITLES */
+        .title-container {
+            margin-bottom: 2rem;
+            margin-top: 2rem;
+            z-index: 10;
+            border-bottom: 1px solid var(--text-dim);
+            padding-bottom: 15px;
+            width: 80%;
+            max-width: 400px;
+        }
+        
+        h1.main-title {
+            font-size: 2.5rem;
+            font-weight: 900;
+            margin: 0;
+            color: var(--text-color);
+            text-shadow: 0 0 10px rgba(255, 113, 0, 0.5);
+            text-transform: uppercase;
+        }
+
+        h2.subtitle {
+            font-size: 0.9rem;
+            font-weight: 400;
+            color: var(--text-color);
+            opacity: 0.8;
+            margin: 0.5rem 0 0 0;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        /* GAUGE */
+        .gauge-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            /* Calculations based on 5273s Orbit:
+               750s  (Safe Start)  = 14.22%
+               2040s (Warn Start)  = 38.69%
+               2340s (Window End)  = 44.38%
+            */
+            background: conic-gradient(
+                var(--danger-color) 0% 14.22%, 
+                var(--safe-color) 14.22% 38.69%,
+                var(--warn-color) 38.69% 44.38%,
+                var(--danger-color) 44.38% 100%
+            );
+            box-shadow: 0 0 30px rgba(255, 113, 0, 0.2); 
+            margin-bottom: 1rem;
+            border: 1px solid #333;
+        }
+
+        .gauge-inner {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 260px;
+            height: 260px;
+            background-color: var(--bg-color);
+            border-radius: 50%;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 20px #000;
+        }
+
+        /* STAR MARKER (PERIAPSIS) */
+        .periapsis-marker {
+            position: absolute;
+            top: -18px; 
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 1.5rem;
+            color: #ffffff;
+            text-shadow: 0 0 10px #fff, 0 0 20px #00ffff;
+            z-index: 100;
+            animation: starPulse 3s infinite ease-in-out;
+            cursor: help;
+            pointer-events: auto;
+        }
+
+        @keyframes starPulse {
+            0%, 100% { text-shadow: 0 0 10px #fff, 0 0 20px #00ffff; opacity: 1; }
+            50% { text-shadow: 0 0 20px #fff, 0 0 40px #00ffff; opacity: 0.8; }
+        }
+
+        /* THE TOOLTIP */
+        .periapsis-tooltip {
+            visibility: hidden;
+            width: 140px;
+            background-color: rgba(5, 5, 5, 0.95);
+            color: var(--text-color);
+            text-align: center;
+            border: 1px solid var(--text-color);
+            padding: 8px;
+            position: absolute;
+            bottom: 80%;
+            left: 50%;
+            margin-left: -70px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.7rem;
+            line-height: 1.4;
+            box-shadow: 0 0 15px rgba(255, 113, 0, 0.3);
+            pointer-events: none;
+        }
+
+        .periapsis-marker:hover .periapsis-tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .needle-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            transition: transform 1s linear;
+            pointer-events: none;
+        }
+
+        .needle {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            width: 4px;
+            height: 30px;
+            background-color: var(--needle-color);
+            transform: translateX(-50%);
+            box-shadow: 0 0 8px white;
+            border-radius: 2px;
+        }
+
+        /* STATUS TEXT */
+        .status-label { 
+            font-size: 0.7rem; 
+            letter-spacing: 2px; 
+            color: var(--text-dim); 
+            margin-bottom: 5px; 
+            text-transform: uppercase;
+        }
+        
+        #status-main { 
+            font-size: 2.5rem; 
+            font-weight: 800; 
+            margin: 0; 
+            line-height: 1; 
+            text-transform: uppercase;
+        }
+        
+        #timer { 
+            font-size: 1.2rem; 
+            font-variant-numeric: tabular-nums; 
+            margin-top: 10px; 
+            color: var(--text-color); 
+        }
+        
+        #next-opening { 
+            font-size: 0.6rem; 
+            color: var(--text-dim); 
+            margin-top: 8px; 
+            font-weight: 400; 
+            text-transform: uppercase;
+        }
+        
+        #utc-clock { 
+            margin-top: 10px; 
+            font-size: 1.1rem; 
+            color: var(--text-color); 
+            text-transform: uppercase;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        /* MISSION PLANNER STYLES */
+        .planner-container {
+            margin-top: 30px;
+            width: 85%;
+            max-width: 400px;
+            border: 1px solid var(--text-dim);
+            background: rgba(20, 10, 0, 0.4);
+            padding: 15px;
+            box-shadow: 0 0 15px rgba(255, 113, 0, 0.1);
+        }
+
+        .planner-header {
+            font-size: 1rem;
+            color: var(--text-color);
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--text-dim);
+            padding-bottom: 5px;
+        }
+
+        /* Custom Date Masking Container */
+        .date-input-wrapper {
+            position: relative;
+            width: 100%;
+            height: 40px;
+            margin-bottom: 15px;
+            background-color: #111;
+            border: 1px solid var(--text-color);
+        }
+
+        /* The fake text the user sees (Elite Year) */
+        #date-display-mask {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-color);
+            font-size: 0.9rem;
+            pointer-events: none; /* Let clicks pass through to input */
+            text-transform: uppercase;
+        }
+
+        /* The real input, invisible but clickable */
+        input[type="date"] {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0; /* INVISIBLE */
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        /* Scrollable Log */
+        .log-container {
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+            padding-right: 5px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--text-color) #111;
+        }
+
+        .log-container::-webkit-scrollbar { width: 6px; }
+        .log-container::-webkit-scrollbar-track { background: #111; }
+        .log-container::-webkit-scrollbar-thumb { background-color: var(--text-dim); border-radius: 3px; }
+
+        .log-entry {
+            font-size: 0.8rem;
+            padding: 5px 0;
+            border-bottom: 1px solid #331a00;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .log-entry span { font-variant-numeric: tabular-nums; }
+        .log-label { color: var(--safe-color); }
+
+        .disclaimer {
+            margin-top: 25px;
+            font-size: 0.7rem;
+            color: var(--text-dim); 
+            font-style: italic;
+            max-width: 80%;
+            line-height: 1.4;
+            border: 1px solid #331a00;
+            padding: 5px;
+            background: rgba(50, 25, 0, 0.2);
+        }
+
+        .credits {
+            margin-top: 10px;
+            font-size: 0.6rem;
+            color: #555;
+            max-width: 90%;
+        }
+        .credits a { color: #777; text-decoration: none; }
+
+        /* Neon Text Effects */
+        .status-safe { color: var(--safe-color); text-shadow: 0 0 15px var(--safe-color); }
+        .status-warn { color: var(--warn-color); text-shadow: 0 0 15px var(--warn-color); }
+        .status-danger { color: var(--danger-color); text-shadow: 0 0 15px var(--danger-color); }
+    </style>
+</head>
+<body class="vc-init">
+    <div class="title-container">
+        <h1 class="main-title">Death Clock</h1>
+        <h2 class="subtitle">For landing on <br>Monde de la Mort</h2>
+    </div>
+
+    <div class="gauge-container">
+        <div class="periapsis-marker" id="periapsis-star">
+            ★
+            <div class="periapsis-tooltip" id="periapsis-tooltip">PERIAPSIS<br><span style="font-size:0.8em; color:#fff;">04:12:49 UTC</span></div>
+        </div>
+
+        <div class="needle-container" id="needle-rotator" style="transform: rotate(95.3207deg);">
+            <div class="needle"></div>
+        </div>
+        <div class="gauge-inner">
+            <div class="status-label">Status</div>
+            <div id="status-main" class="status-safe">SAFE</div>
+            <div id="timer">Caution in 10m 43s</div>
+            <div id="next-opening">Next safe opening at 04:25 UTC</div>
+        </div>
+    </div>
+
+    <div id="utc-clock">30 APR 3312 03:08:12</div>
+    
+    <div class="planner-container">
+        <div class="planner-header">Mission Planner (UTC)</div>
+        
+        <div class="date-input-wrapper">
+            <div id="date-display-mask">30 APR 3312 ▼</div>
+            <input type="date" id="date-picker" value="2026-04-30">
+        </div>
+
+        <div class="log-container" id="schedule-log"><div class="log-entry"><span class="log-label">WINDOW 1</span> <span>00:01 - 00:28</span></div><div class="log-entry"><span class="log-label">WINDOW 2</span> <span>01:29 - 01:56</span></div><div class="log-entry"><span class="log-label">WINDOW 3</span> <span>02:57 - 03:23</span></div><div class="log-entry"><span class="log-label">WINDOW 4</span> <span>04:25 - 04:51</span></div><div class="log-entry"><span class="log-label">WINDOW 5</span> <span>05:53 - 06:19</span></div><div class="log-entry"><span class="log-label">WINDOW 6</span> <span>07:21 - 07:47</span></div><div class="log-entry"><span class="log-label">WINDOW 7</span> <span>08:48 - 09:15</span></div><div class="log-entry"><span class="log-label">WINDOW 8</span> <span>10:16 - 10:43</span></div><div class="log-entry"><span class="log-label">WINDOW 9</span> <span>11:44 - 12:11</span></div><div class="log-entry"><span class="log-label">WINDOW 10</span> <span>13:12 - 13:39</span></div><div class="log-entry"><span class="log-label">WINDOW 11</span> <span>14:40 - 15:07</span></div><div class="log-entry"><span class="log-label">WINDOW 12</span> <span>16:08 - 16:34</span></div><div class="log-entry"><span class="log-label">WINDOW 13</span> <span>17:36 - 18:02</span></div><div class="log-entry"><span class="log-label">WINDOW 14</span> <span>19:04 - 19:30</span></div><div class="log-entry"><span class="log-label">WINDOW 15</span> <span>20:32 - 20:58</span></div><div class="log-entry"><span class="log-label">WINDOW 16</span> <span>21:59 - 22:26</span></div><div class="log-entry"><span class="log-label">WINDOW 17</span> <span>23:27 - 23:54</span></div></div>
+    </div>
+
+    <div class="disclaimer">
+        Use at your own risk.<br> Trust your own eyes and skills.<br> Fly safe, CMDR! o7
+    </div>
+
+    <div class="credits">
+        Made by CMDR Edstorm<br>Rehosted by CMDR Ettanin<br>Based on CMDR Solandris <a href="https://web.archive.org/web/20260430030640/https://docs.google.com/spreadsheets/d/1OpGMnPNcPhKywwFqZNl1HpmawruFnfFOBpKN2EApxog/edit?usp=drivesdk" target="_blank">spreadsheet</a>
+    </div>
+
+    <script>
+        window.addEventListener('DOMContentLoaded', (event) => {
+            
+            // --- CONFIGURATION ---
+            const referenceTime = Date.UTC(2026, 0, 22, 11, 11, 36);
+            
+            // Orbit: 1h 27m 53s = 5273 seconds
+            const orbitDurationSec = 5273; 
+            const orbitDurationMs = orbitDurationSec * 1000;
+
+            // Updated Zones (Seconds from Periapsis)
+            // SAFE starts immediately at 12m 30s
+            // WARN only happens at the end (34m 00s -> 39m 00s)
+            
+            const safeStart = 750;     // 0h 12m 30s (Green Start)
+            const safeEnd = 2040;      // 0h 34m 00s (Green End / Yellow Start)
+            const marginEnd = 2340;    // 0h 39m 00s (Red Start)
+
+            // Elements
+            const elNeedle = document.getElementById('needle-rotator');
+            const elStatus = document.getElementById('status-main');
+            const elTimer = document.getElementById('timer');
+            const elNextOpen = document.getElementById('next-opening');
+            const elUtc = document.getElementById('utc-clock');
+            const elDatePicker = document.getElementById('date-picker');
+            const elDateMask = document.getElementById('date-display-mask');
+            const elScheduleLog = document.getElementById('schedule-log');
+            const elTooltip = document.getElementById('periapsis-tooltip');
+
+            const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+            // 1. MAIN LOOP
+            function formatTime(s) {
+                const mins = Math.floor(s / 60);
+                const secs = Math.floor(s % 60);
+                return `${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
+            }
+
+            function update() {
+                const now = new Date();
+                const nowMs = now.getTime();
+
+                // Orbit Position Logic
+                let diff = nowMs - referenceTime;
+                let orbitProgressMs = diff % orbitDurationMs;
+                if (orbitProgressMs < 0) {
+                    orbitProgressMs += orbitDurationMs;
+                }
+                const orbitProgressSec = orbitProgressMs / 1000;
+
+                // Rotate Needle
+                const degrees = (orbitProgressMs / orbitDurationMs) * 360;
+                if(elNeedle) elNeedle.style.transform = `rotate(${degrees}deg)`;
+
+                // --- 3-STAGE STATUS LOGIC (Unsafe -> Green -> Yellow -> Unsafe) ---
+                
+                // 1. UNSAFE (Before Safe)
+                if (orbitProgressSec < safeStart) {
+                    if(elStatus) { elStatus.innerText = "UNSAFE"; elStatus.className = "status-danger"; }
+                    if(elTimer) {
+                         const timeLeft = safeStart - orbitProgressSec;
+                         elTimer.innerText = "Opens in " + formatTime(timeLeft);
+                    }
+                }
+                // 2. SAFE (Green)
+                else if (orbitProgressSec >= safeStart && orbitProgressSec < safeEnd) {
+                    if(elStatus) { elStatus.innerText = "SAFE"; elStatus.className = "status-safe"; }
+                    if(elTimer) {
+                         const timeLeft = safeEnd - orbitProgressSec;
+                         elTimer.innerText = "Caution in " + formatTime(timeLeft);
+                    }
+                }
+                // 3. CAUTION (Yellow - Margin End)
+                else if (orbitProgressSec >= safeEnd && orbitProgressSec < marginEnd) {
+                    if(elStatus) { elStatus.innerText = "CAUTION"; elStatus.className = "status-warn"; }
+                    if(elTimer) {
+                         const timeLeft = marginEnd - orbitProgressSec;
+                         elTimer.innerText = "Closes in " + formatTime(timeLeft);
+                    }
+                }
+                // 4. UNSAFE (After Window)
+                else {
+                    if(elStatus) { elStatus.innerText = "UNSAFE"; elStatus.className = "status-danger"; }
+                    if(elTimer) {
+                        // Time until next Safe Start
+                        const timeLeft = (orbitDurationSec - orbitProgressSec) + safeStart;
+                        elTimer.innerText = "Opens in " + formatTime(timeLeft);
+                    }
+                }
+
+                // Next Opening Label
+                const currentOrbitStartMs = nowMs - orbitProgressMs;
+                let nextOpenMs;
+                if (orbitProgressSec < safeStart) {
+                    nextOpenMs = currentOrbitStartMs + (safeStart * 1000);
+                } else {
+                    nextOpenMs = currentOrbitStartMs + orbitDurationMs + (safeStart * 1000);
+                }
+                const nextOpenDate = new Date(nextOpenMs);
+                const hh = nextOpenDate.getUTCHours().toString().padStart(2, '0');
+                const mm = nextOpenDate.getUTCMinutes().toString().padStart(2, '0');
+                if(elNextOpen) {
+                    elNextOpen.innerText = `Next safe opening at ${hh}:${mm} UTC`;
+                }
+
+                // Update Star Tooltip
+                if(elTooltip) {
+                    const orbitsCompleted = Math.floor(diff / orbitDurationMs);
+                    const nextPeriapsisMs = referenceTime + ((orbitsCompleted + 1) * orbitDurationMs);
+                    
+                    const nextPDate = new Date(nextPeriapsisMs);
+                    const pH = nextPDate.getUTCHours().toString().padStart(2, '0');
+                    const pM = nextPDate.getUTCMinutes().toString().padStart(2, '0');
+                    const pS = nextPDate.getUTCSeconds().toString().padStart(2, '0');
+                    
+                    const newHTML = `PERIAPSIS<br><span style="font-size:0.8em; color:#fff;">${pH}:${pM}:${pS} UTC</span>`;
+                    if (elTooltip.innerHTML !== newHTML) {
+                        elTooltip.innerHTML = newHTML;
+                    }
+                }
+
+                // UTC Clock
+                if(elUtc) {
+                    const eliteYear = now.getUTCFullYear() + 1286;
+                    const day = String(now.getUTCDate()).padStart(2, '0');
+                    const month = monthNames[now.getUTCMonth()];
+                    const timeStr = now.toISOString().substring(11, 19);
+                    elUtc.innerText = `${day} ${month} ${eliteYear} ${timeStr}`;
+                }
+            }
+
+            setInterval(update, 100);
+            update(); 
+
+
+            // 2. MISSION PLANNER LOGIC
+            const today = new Date();
+            const yyyy = today.getUTCFullYear();
+            const MM = String(today.getUTCMonth() + 1).padStart(2, '0');
+            const dd = String(today.getUTCDate()).padStart(2, '0');
+            elDatePicker.value = `${yyyy}-${MM}-${dd}`;
+
+            function updateDateMask() {
+                const dateVal = elDatePicker.value;
+                if(!dateVal) return;
+                const [selY, selM, selD] = dateVal.split('-');
+                const eliteY = parseInt(selY) + 1286;
+                const monthName = monthNames[parseInt(selM) - 1];
+                elDateMask.innerText = `${selD} ${monthName} ${eliteY} ▼`;
+            }
+
+            function generateSchedule() {
+                const dateVal = elDatePicker.value;
+                if(!dateVal) return;
+
+                updateDateMask();
+                elScheduleLog.innerHTML = ""; 
+
+                const [selY, selM, selD] = dateVal.split('-').map(Number);
+                const dayStart = Date.UTC(selY, selM - 1, selD, 0, 0, 0);
+                const dayEnd = dayStart + (24 * 60 * 60 * 1000);
+
+                const diff = dayStart - referenceTime;
+                const orbitsElapsed = Math.floor(diff / orbitDurationMs);
+                let currentPeriapsis = referenceTime + (orbitsElapsed * orbitDurationMs);
+
+                for(let i=0; i < 20; i++) {
+                    const winStart = currentPeriapsis + (safeStart * 1000); // 12m30s
+                    const winEnd = currentPeriapsis + (marginEnd * 1000);   // 39m00s
+
+                    if (winStart >= dayEnd) break;
+                    if (winEnd <= dayStart) {
+                        currentPeriapsis += orbitDurationMs;
+                        continue;
+                    }
+
+                    const dStart = new Date(winStart);
+                    const dEnd = new Date(winEnd);
+
+                    const sH = String(dStart.getUTCHours()).padStart(2,'0');
+                    const sM = String(dStart.getUTCMinutes()).padStart(2,'0');
+                    const eH = String(dEnd.getUTCHours()).padStart(2,'0');
+                    const eM = String(dEnd.getUTCMinutes()).padStart(2,'0');
+
+                    const div = document.createElement('div');
+                    div.className = "log-entry";
+                    div.innerHTML = `<span class="log-label">WINDOW ${i+1}</span> <span>${sH}:${sM} - ${eH}:${eM}</span>`;
+                    elScheduleLog.appendChild(div);
+
+                    currentPeriapsis += orbitDurationMs;
+                }
+            }
+
+            elDatePicker.addEventListener('change', generateSchedule);
+            elDatePicker.addEventListener('input', updateDateMask);
+            generateSchedule(); 
+        });
+    </script>
+</body></html>
